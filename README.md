@@ -6,11 +6,11 @@ DCA, or Dollar Cost Averaging, is a simple trading strategy that helps you build
 
 ### Usage
 
-Feel free to use and experiment with this bot! You can find the code and details on how to run it in the [source code repository](#your-github-repository-link).
+Feel free to use and experiment with this bot! You can find the code and details on how to run it in the [source code repository](https://github.com/AGMASO/KrakenFutures_DCA_BOT).
 
 ### Contact
 
-If you have any questions, suggestions, or just want to connect, you can reach me on LinkedIn: [Your LinkedIn Profile](#your-linkedin-profile-link).
+If you have any questions, suggestions, or just want to connect, you can reach me on LinkedIn: [Your LinkedIn Profile](https://www.linkedin.com/in/alejandro-guindo-mart%C3%ADn-973ab2246/).
 
 ### Disclaimer
 
