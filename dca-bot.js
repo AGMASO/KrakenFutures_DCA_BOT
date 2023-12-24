@@ -55,6 +55,7 @@ const separationTakeProfit = 1.012; // 1.2% = 1.012
 let limitPrice = null;
 let clientId = "my_client_id";
 let triggerSignal = "mark";
+let intervalId;
 
 /**
  * MAIN FUNCTION also called BOT CYCLE
@@ -155,74 +156,93 @@ async function main() {
      * a new bot cycle and increment by one the cycleCounter.
      */
 
-    let intervalId = setInterval(async () => {
-      //Get the Open Orders and check if a takeProfit order with ID take_profit exists
-      let openOrdersPromise = await apiInstance.getOpenOrders();
-      const responseOpenOrders = JSON.parse(openOrdersPromise.body);
-      let takeProfitExist;
-      for (const order of responseOpenOrders.openOrders) {
-        order.orderType == "take_profit"
-          ? (takeProfitExist = true)
-          : (takeProfitExist = false);
-      }
+    const intervalFunction = async () => {
+      try {
+        //Get the Open Orders and check if a takeProfit order with ID take_profit exists
+        let openOrdersPromise = await apiInstance.getOpenOrders();
+        const responseOpenOrders = JSON.parse(openOrdersPromise.body);
+        let takeProfitExist;
+        for (const order of responseOpenOrders.openOrders) {
+          order.orderType == "take_profit"
+            ? (takeProfitExist = true)
+            : (takeProfitExist = false);
+        }
 
-      //Iterate throug the postions opened
-      let openPositionsPromise = await apiInstance.getOpenPositions();
-      const responseBody = JSON.parse(openPositionsPromise.body);
+        //Iterate throug the postions opened
+        let openPositionsPromise = await apiInstance.getOpenPositions();
+        const responseBody = JSON.parse(openPositionsPromise.body);
 
-      //Check if there are some open position
-      if (responseBody.openPositions.length > 0) {
-        for (const position of responseBody.openPositions) {
-          let newMainBotPrice = position.price;
-          let stopPrice = Math.round(newMainBotPrice * 1.01);
-          limitPrice = stopPrice - 10;
-          console.log(position);
-          console.log(
-            `Symbol: ${position.symbol}, Price: ${newMainBotPrice}, Size ${position.size}`
-          );
+        //Check if there are some open position
+        if (responseBody.openPositions.length > 0) {
+          for (const position of responseBody.openPositions) {
+            let newMainBotPrice = position.price;
+            let stopPrice = Math.round(newMainBotPrice * 1.01);
+            limitPrice = stopPrice - 10;
+            console.log(position);
+            console.log(
+              `Symbol: ${position.symbol}, Price: ${newMainBotPrice}, Size ${position.size}`
+            );
 
-          console.log(
-            "The size of the First order openend of the cycle" +
-              sizeOpenPosition
-          );
-          console.log(`You are in the BotCycle: ${cycleCounter}`);
-          if (position.size > sizeOpenPosition && takeProfitExist) {
-            edit = {
-              cliOrdId: "takeProfitCycle",
-              size: position.size,
-              limitPrice,
-              stopPrice,
-            };
-            let editOrderPromise = await apiInstance.editOrder(edit);
-            //console.log(editOrderPromise);
-            //Update the new position.size
-            sizeOpenPosition = position.size;
-            console.log("Take Profit Updated");
+            console.log(
+              "The size of the First order openend of the cycle" +
+                sizeOpenPosition
+            );
+
+            console.log(`You are in the BotCycle: ${cycleCounter}`);
+            if (position.size > sizeOpenPosition && takeProfitExist) {
+              edit = {
+                cliOrdId: "takeProfitCycle",
+                size: position.size,
+                limitPrice,
+                stopPrice,
+              };
+              let editOrderPromise = await apiInstance.editOrder(edit);
+              //console.log(editOrderPromise);
+              //Update the new position.size
+              sizeOpenPosition = position.size;
+              console.log("Take Profit Updated");
+            }
+          }
+        } else {
+          //Get the orders filled, and check if the lastorder filled is equal to unique ID
+          //"takeProfitCycle".
+          let getFills = await apiInstance.getFills();
+          const responseWithFills = JSON.parse(getFills.body);
+          let lastOrderId = responseWithFills.fills[0].cliOrdId;
+
+          if (lastOrderId === "takeProfitCycle") {
+            console.log("Take Profit Executed. Restarting Cycle...");
+            await apiInstance.cancelAllOrders("PF_XBTUSD");
+            clearInterval(intervalId); // Stop the current interval
+            cycleCounter++; //Increment by one the cycleBot
+            main();
+          } else {
+            console.log("No open positions found.");
+            console.log("Manually closed");
+            await apiInstance.cancelAllOrders("PF_XBTUSD");
+            console.log("All the reamining Orders cancelled");
+            console.log("Start the bot manually");
+            clearInterval(intervalId);
           }
         }
-      } else {
-        //Get the orders filled, and check if the lastorder filled is equal to unique ID
-        //"takeProfitCycle".
-        let getFills = await apiInstance.getFills();
-        const responseWithFills = JSON.parse(getFills.body);
-        let lastOrderId = responseWithFills.fills[0].cliOrdId;
+      } catch (error) {
+        console.error("Error in interval:", error);
 
-        if (lastOrderId === "takeProfitCycle") {
-          console.log("Take Profit Executed. Restarting Cycle...");
-          await apiInstance.cancelAllOrders("PF_XBTUSD");
-          clearInterval(intervalId); // Stop the current interval
-          cycleCounter++; //Increment by one the cycleBot
-          main();
-        } else {
-          console.log("No open positions found.");
-          console.log("Manually closed");
-          await apiInstance.cancelAllOrders("PF_XBTUSD");
-          console.log("All the reamining Orders cancelled");
-          console.log("Start the bot manually");
+        if (
+          error.code === "ENOTFOUND" ||
+          error.code === "ESOCKETTIMEDOUT" ||
+          error.code === "ETIMEDOUT"
+        ) {
+          console.log("Retrying interval after DNS resolution failure.");
+
           clearInterval(intervalId);
+          intervalId = setInterval(intervalFunction, 60000);
+        } else {
+          console.error("Unexpected error. Terminating interval.");
         }
       }
-    }, 60000);
+    };
+    intervalId = setInterval(intervalFunction, 60000);
   }
 }
 
